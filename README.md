@@ -11,7 +11,7 @@ This project aims to evaluate the similarity between the representations of arti
 ## Project definition
 ### Main Question
 * How similar are the representations of ANNs trained on treeshrew and rat's pov videos to each other?
-* How similar are the representations of ANNs (treeshrew and rat) to those in the visual system?
+* How similar are the representations of ANNs (treeshrew and rat) to those in the mouse visual system?
 
 ### Background
 * ANN models are often used to understand the visual system in the brain, specifically the ventral pathway.
