@@ -30,18 +30,26 @@ This project aims to evaluate the similarity between the representations of arti
 * Visualize the results in a way that is easy to interpret.
 
 ## Methodology
-How are you going to do the thing?
+* Generate response matrices of my ANNs from video stimuli
+  * Load the trained models
+  * Save activations at each layer for a short video (response matrix)
+* Download response matrices from the AllenSDK
+  * Bring the data into a format that can be used for RSA
+* Feed them into rsatoolbox to calculate RSMs
+* Calculate similarity between RSMs
+* Visualize the results
+  * Heatmaps of the RSMs
+  * Plots of the similarity between RSMs
 
 ### Dataset
 * Calcium imaging data from the Allen Brain Observatory (https://observatory.brain-map.org/visualcoding/).
 * Our collaborators videos from treeshrew and rat's point of view.
 
 ### Tools
-* PyTorch
-* RSA toolbox
-* AllenSDK
-* Plotly / Matplotlib / Seaborn
-* (maybe?) DataLad
+* AllenSDK for mouse brain data
+* PyTorch to retrieve the representations of the ANNs
+* RSA toolbox for the RSA analysis
+* Plotly / Matplotlib / Seaborn for visualizations
 
 ## Deliverables
 * A Github repository with documented code to reproduce your analyses and results.
