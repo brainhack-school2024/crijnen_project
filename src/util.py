@@ -16,9 +16,9 @@ boc = BrainObservatoryCache(
     manifest_file='../data/brain_observatory_manifest.json')
 
 
-def plot_rsa(kts, save_path=None):
+def plot_rsa(rsa, area, noise_ceiling=None, noise_corrected=False, save_path=None):
     data = []
-    for species, kt in kts.items():
+    for species, kt in rsa.items():
         df_model = pd.DataFrame(kt).melt(var_name='Layer', value_name='RSA')
         df_model['Model'] = species
         df_model['Path'] = [layer[:2] if layer[:2] in ['p1', 'p2'] else '' for layer in df_model['Layer']]
@@ -27,20 +27,27 @@ def plot_rsa(kts, save_path=None):
 
     df = pd.concat(data)
     df['Model_Path'] = df['Model'] + df['Path'].replace({'': '', 'p1': ' P1', 'p2': ' P2'})
+    if noise_ceiling is not None and noise_corrected:
+        df['RSA'] /= np.median(noise_ceiling)
 
     plt.figure(figsize=(10, 6))
-    cs = sns.color_palette("Paired", n_colors=4)
-    sns.pointplot(data=df, x='Layer', y='RSA', hue='Model_Path', palette=[cs[1], cs[1], cs[0], cs[3], cs[3], cs[2]],
-                  dodge=0.4, errwidth=2, markersize=3, markers='o', capsize=0.1, join=False)
+    plt.title(f'Representational Similarity Analysis between {area} and ANNs trained with SSL')
+    colors = ['darkblue', 'blue', 'deepskyblue', 'darkred', 'red', 'orange']
+    sns.pointplot(data=df, x='Layer', y='RSA', hue='Model_Path', palette=colors, dodge=0.4, estimator='median',
+                  errwidth=2, markersize=3, markers='o', join=False)
+    if noise_ceiling is not None and not noise_corrected:
+        plt.axhline(np.median(noise_ceiling), color='black', linestyle='--', label='Noise Ceiling')
     plt.xlabel('Layers')
-    plt.ylabel('RSA')
-    plt.legend(title='Model')
+    plt.xticks(rotation=45)
+    plt.ylabel('RDM similarity\n(noise corrected)' if noise_ceiling is not None and noise_corrected else
+               'RDM similarity')
+    plt.legend(title='Model', bbox_to_anchor=(1.01, 1), loc='upper left')
     plt.grid(True)
+    plt.tight_layout()
 
     if save_path is not None:
-        plt.savefig(save_path)
+        plt.savefig(save_path + ('_nc' if noise_ceiling is not None and noise_corrected else '') + '.svg')
 
-    plt.title(f'RSA Comparison of SSL Models')
     plt.show()
 
 
@@ -78,11 +85,12 @@ def extract_one_path(model, path):
     return m
 
 
-def get_stimulus(stim_type, norm_kwargs, seq_len):
+def get_stimulus(stim_type, seq_len, norm_kwargs=None):
     transforms = T.Compose([
-        T.ToTensor(), T.Resize((64, 64), antialias=True),
+        T.ToTensor(),
+        T.Resize((64, 64), antialias=True),
         T.Lambda(lambda x: x.expand(3, seq_len, -1, -1)),
-        TV.Normalize(**norm_kwargs),
+        TV.Normalize(**norm_kwargs) if norm_kwargs is not None else T.Lambda(lambda x: x),
     ])
     data_set = boc.get_ophys_experiment_data(501498760)
     data = data_set.get_stimulus_template(stim_type)
