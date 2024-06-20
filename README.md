@@ -70,12 +70,12 @@ Two stimuli were used: Natural Movie One and Natural Scenes. For each stimulus, 
 
 #### Natural Movie One Stimuli
 
-![depth 175](nm_175.png)
-![depth 275](nm_275.png)
+![depth 175](results/nm_175.png)
+![depth 275](results/nm_275.png)
 
 #### Natural Scenes Stimuli
-![depth 175](ns_175.png)
-![depth 275](ns_275.png)
+![depth 175](results/ns_175.png)
+![depth 275](results/ns_275.png)
 
 ## Conclusion and acknowledgement
 
