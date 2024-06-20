@@ -1,20 +1,22 @@
 import rsatoolbox as rsa
 import os
 import torch
+import numpy as np
 
 from src.rdms import get_rdms_allen, get_rdms_model
 from src.util import plot_rsa
 
 
 def compare_rsa(models, areas=[('VISp', 275, 'Cux2-CreERT2')], stim_type='natural_movie_one', num_iter=100,
-                seq_len=15, fig_path=None):
+                seq_len=15, fig_path=None, seed=42):
+    np.random.seed(seed)
     all_rsas = {}
     all_rdms = {}
     all_nc = {}
     for a in areas:
         area, depth, cre_line = a
 
-        path = os.path.join(fig_path if fig_path is not None else '', area, stim_type, f'{depth}_{cre_line}.pt')
+        path = os.path.join(fig_path if fig_path is not None else '', area, stim_type, f'{depth}_{cre_line}_{seed}.pt')
         if os.path.exists(path):
             data = torch.load(path)
             rsas, rdms, noise_ceiling = data['rsa'], data['rdm'], data['nc']
@@ -28,7 +30,7 @@ def compare_rsa(models, areas=[('VISp', 275, 'Cux2-CreERT2')], stim_type='natura
             os.makedirs(out_dir, exist_ok=True)
             save_path = os.path.join(out_dir, f'{depth}_{cre_line}')
             if not os.path.exists(path):
-                torch.save({'rsa': rsas, 'rdm': rdms, 'nc': noise_ceiling}, save_path + '.pt')
+                torch.save({'rsa': rsas, 'rdm': rdms, 'nc': noise_ceiling}, path)
 
         plot_rsa(rsas, area=a, noise_ceiling=noise_ceiling, stim_type=stim_type, noise_corrected=False,
                  save_path=save_path)

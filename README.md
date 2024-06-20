@@ -10,14 +10,14 @@ This project aims to evaluate the similarity between the representations of arti
 
 ## Project definition
 ### Main Question
-* How similar are the representations of ANNs trained on treeshrew and rat's pov videos to each other?
-* How similar are the representations of ANNs (treeshrew and rat) to those in the mouse visual system?
+How similar are the representations of ANNs (treeshrew and rat) to those in the mouse visual system?
 
 ### Background
 * ANN models are often used to understand the visual system in the brain, specifically the ventral pathway.
 * First, image classification models were shown to predict neural responses in the ventral pathway (Yamins et al., 2014. https://doi.org/10.1073/pnas.1403112111).
 * Similarly, the representations learned by self-supervised models produce good matches to the ventral pathway (Talia Konkle, George Alvarez, 2020. https://doi.org/10.1167/jov.20.11.498).
-* We trained self-supervised models on videos from treeshrew and rat's point of view.
+* Recently, it was shown that it is not only possible to predict neural responses in the ventral pathway but also in the dorsal pathway with a model that has two parallel pathways (Bakhtiari et al., 2021. https://doi.org/10.1101/2021.06.18.448989).
+* We trained self-supervised models on videos from treeshrew and rat's point of view with two pathways.
 * RSA is used to compare two representational spaces:
   * Response matrices are created for every brain area and every layer of the ANNs, where each element represents the response of a neuron to a video sequence.
   * Use Pearson correlation to calculate the similarity of every pair of columns in the response matrix, forming a Representation Similarity Matrix (RSM).
@@ -30,30 +30,65 @@ This project aims to evaluate the similarity between the representations of arti
 * Visualize the results in a way that is easy to interpret.
 
 ## Methodology
+* Generate response matrices from visual areas in the mouse brain
+  1. Download calcium recordings of cell activities with AllenSDK
+  2. Find the responses to each image / video in the dataset
+  3. Save response matrices
 * Generate response matrices of my ANNs from video stimuli
-  * Load the trained models
-  * Save activations at each layer for a short video (response matrix)
-* Download response matrices from the AllenSDK
-  * Bring the data into a format that can be used for RSA
-* Feed them into rsatoolbox to calculate RSMs
-* Calculate similarity between RSMs
+  1. Load the trained models
+  2. Feed stimuli (images/videos) to ANN
+  3. Save response matrices for each layer in the ANN
+* Use rsatoolbox to calculate RDMs of all response matrices
+* Calculate similarity between RDMs (using rsatoolbox)
 * Visualize the results
-  * Heatmaps of the RSMs
-  * Plots of the similarity between RSMs
+  * Plots of the similarity between RDMs for different brain areas and ANN layers
 
 ### Dataset
+* Our collaborators videos from treeshrew and rat's point of view, which were used to train the ANN models of the visual system using SSL.
 * Calcium imaging data from the Allen Brain Observatory (https://observatory.brain-map.org/visualcoding/).
-* Our collaborators videos from treeshrew and rat's point of view.
 
 ### Tools
 * AllenSDK for mouse brain data
 * PyTorch to retrieve the representations of the ANNs
-* RSA toolbox for the RSA analysis
-* Plotly / Matplotlib / Seaborn for visualizations
+* rsatoolbox for the RSA analysis
+* Plotly, Matplotlib and Seaborn for visualizations
 
-## Deliverables
-* A Github repository with documented code to reproduce your analyses and results.
-* A jupyter notebook of the analysis codes and visualisations to display the results.
+### Deliverables
+* This GitHub repository containing the code and model checkpoints to reproduce my results.
+* A jupyter notebook of the RSA: [rsa notebook](notebooks/analysis.ipynb)
+* A jupyter notebook containing the visualisations of my analysis: [rsa notebook](notebooks/results.ipynb)
+
+## Results
+
+### Visualizing the Representational Similarity Analysis
+
+The following figures show the results of the RSA between the visual system of the mouse brain and the ANNs of the visual system trained on treeshrew and rat videos. 
+Each figure shows the similarity between the representations of the visual system and the ANNs for five different brain areas. 
+The noise ceiling is shown in grey, the similarity between the representations of the visual system and the rat ANNs is shown in blue, and the similarity between the representations of the visual system and the treeshrew ANNs is shown in red. 
+Since the ANN models have two parallel pathways, the similarity between the representations of the visual system and the two pathways of the ANNs are shown separately.
+Two stimuli were used: Natural Movie One and Natural Scenes. For each stimulus, I used two depths of mouse brain recordings from the allen brain observatory: 175 and 275, respectively.
+
+#### Natural Movie One Stimuli
+
+![depth 175](nm_175.png)
+![depth 275](nm_275.png)
+
+#### Natural Scenes Stimuli
+![depth 175](ns_175.png)
+![depth 275](ns_275.png)
+
+## Conclusion and acknowledgement
+
+The results show that the representations of the visual system in the mouse brain are more similar to the representations of the ANNs trained on rat videos than to the ones trained on treeshrew videos. 
+
+I would like to thank the brainhack school for providing me with the opportunity to work on this project. I would also like to thank my collaborators for providing me with the data and the guidance to complete this project.
 
 ## Collaborators
-* Shahab Bakhtiari, Madineh Sedigh-Sarvestani
+* Shahab Bakhtiari
+* Madineh Sedigh-Sarvestani
+
+## References
+
+* [Yamins et al., 2014. Performance-optimized hierarchical models predict neural responses in higher visual cortex](https://doi.org/10.1073/pnas.1403112111)
+* [Talia Konkle, George Alvarez, 2020. Deepnets do not need category supervision to predict visual system responses to objects](https://doi.org/10.1167/jov.20.11.498)
+* [Bakhtiari et al., 2021. The functional specialization of visual cortex emerges from training parallel pathways with self-supervised predictive learning](https://doi.org/10.1101/2021.06.18.448989)
