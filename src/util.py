@@ -16,7 +16,8 @@ boc = BrainObservatoryCache(
     manifest_file='../data/brain_observatory_manifest.json')
 
 
-def plot_rsa(rsa, area, noise_ceiling=None, noise_corrected=False, save_path=None):
+def plot_rsa(rsa, area, stim_type, noise_ceiling=None, noise_corrected=False, save_path=None):
+    area, depth, cre_line = area
     data = []
     for species, kt in rsa.items():
         df_model = pd.DataFrame(kt).melt(var_name='Layer', value_name='RSA')
@@ -31,12 +32,16 @@ def plot_rsa(rsa, area, noise_ceiling=None, noise_corrected=False, save_path=Non
         df['RSA'] /= np.median(noise_ceiling)
 
     plt.figure(figsize=(10, 6))
-    plt.title(f'Representational Similarity Analysis between {area} and ANNs trained with SSL')
     colors = ['darkblue', 'blue', 'deepskyblue', 'darkred', 'red', 'orange']
     sns.pointplot(data=df, x='Layer', y='RSA', hue='Model_Path', palette=colors, dodge=0.4, estimator='median',
                   errwidth=2, markersize=3, markers='o', join=False)
+    x_limits = plt.xlim()
     if noise_ceiling is not None and not noise_corrected:
-        plt.axhline(np.median(noise_ceiling), color='black', linestyle='--', label='Noise Ceiling')
+        med = np.median(noise_ceiling)
+        sd = np.std(noise_ceiling)
+        plt.axhline(med, color='black', linestyle='--', label='Noise Ceiling Median')
+        plt.fill_between(x=[x_limits[0], x_limits[1]], y1=med-sd, y2=med+sd, color='gray', alpha=0.5,
+                         label='Noise Ceiling SD')
     plt.xlabel('Layers')
     plt.xticks(rotation=45)
     plt.ylabel('RDM similarity\n(noise corrected)' if noise_ceiling is not None and noise_corrected else
@@ -44,10 +49,13 @@ def plot_rsa(rsa, area, noise_ceiling=None, noise_corrected=False, save_path=Non
     plt.legend(title='Model', bbox_to_anchor=(1.01, 1), loc='upper left')
     plt.grid(True)
     plt.tight_layout()
+    plt.xlim(x_limits)
 
     if save_path is not None:
         plt.savefig(save_path + ('_nc' if noise_ceiling is not None and noise_corrected else '') + '.svg')
 
+    plt.title(f'Representational Similarity Analysis between {area} and ANNs trained with SSL\n'
+              f'stimulus: {stim_type}, depth: {depth}, cre_line: {cre_line}')
     plt.show()
 
 

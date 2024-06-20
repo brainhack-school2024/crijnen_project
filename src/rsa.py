@@ -22,7 +22,7 @@ def compare_rsa(models, areas=[('VISp', 275, 'Cux2-CreERT2')], stim_type='natura
             rsas, rdms, noise_ceiling = calculate_rsa(area=area, depth=depth, cre_line=cre_line, stim_type=stim_type,
                                                       num_iter=num_iter, models=models, seq_len=seq_len)
 
-        save_path = fig_path if not os.path.exists(path) else None
+        save_path = fig_path
         if save_path is not None:
             out_dir = os.path.join(save_path, area, stim_type)
             os.makedirs(out_dir, exist_ok=True)
@@ -30,8 +30,10 @@ def compare_rsa(models, areas=[('VISp', 275, 'Cux2-CreERT2')], stim_type='natura
             if not os.path.exists(path):
                 torch.save({'rsa': rsas, 'rdm': rdms, 'nc': noise_ceiling}, save_path + '.pt')
 
-        plot_rsa(rsas, area=area, noise_ceiling=noise_ceiling, noise_corrected=False, save_path=save_path)
-        plot_rsa(rsas, area=area, noise_ceiling=noise_ceiling, noise_corrected=True, save_path=save_path)
+        plot_rsa(rsas, area=a, noise_ceiling=noise_ceiling, stim_type=stim_type, noise_corrected=False,
+                 save_path=save_path)
+        plot_rsa(rsas, area=a, noise_ceiling=noise_ceiling, stim_type=stim_type, noise_corrected=True,
+                 save_path=save_path)
 
         all_rsas[a] = rsas
         all_rdms[a] = rdms
