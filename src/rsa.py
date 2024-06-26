@@ -7,8 +7,29 @@ from src.rdms import get_rdms_allen, get_rdms_model
 from src.util import plot_rsa
 
 
-def compare_rsa(models, areas=[('VISp', 275, 'Cux2-CreERT2')], stim_type='natural_movie_one', num_iter=100,
-                seq_len=15, fig_path=None, seed=42):
+def compare_rsa(models: dict, areas: list = [('VISp', 275, 'Cux2-CreERT2')], stim_type: str = 'natural_movie_one',
+                num_iter: int = 100, seq_len: int = 15, fig_path: str = None, seed: int = 42):
+    """
+    Compare RSA between Allen Brain Observatory data and model activations.
+
+    Parameters
+    ----------
+    models : dict
+        Dictionary of species and their model checkpoint paths.
+    areas : list
+        List of tuples of brain areas, depth, and cre line to use.
+    stim_type : str
+        Which stimulus type to use, can be one of 'natural_scenes', 'natural_movie_one', 'natural_movie_two',
+        'natural_movie_three'.
+    num_iter : int
+        Number of iterations to use for noise ceiling estimation using bootstrap.
+    seq_len : int
+        Sequence length to use for the stimulus and model.
+    fig_path : str
+        Path to save the figures.
+    seed : int
+        Random seed to use for reproducibility.
+    """
     np.random.seed(seed)
     all_rsas = {}
     all_rdms = {}
@@ -44,7 +65,37 @@ def compare_rsa(models, areas=[('VISp', 275, 'Cux2-CreERT2')], stim_type='natura
     return all_rsas, all_rdms, all_nc
 
 
-def calculate_rsa(area, depth, cre_line, stim_type, num_iter, models, seq_len):
+def calculate_rsa(area: str, depth: int, cre_line: str, stim_type: str, num_iter: int, models: dict, seq_len: int):
+    """
+    Calculate rdm similarity between Allen Brain Observatory data and model activations using kendall's tau-a.
+
+    Parameters
+    ----------
+    area : str
+        Which brain area to use. Can be one of 'VISp', 'VISl', 'VISal', 'VISpm', 'VISam', 'VISrl'.
+    depth : int
+        Which depth to use.
+    cre_line : str
+        Which cre line to use.
+    stim_type : str
+        Which stimulus type to use, can be one of 'natural_scenes', 'natural_movie_one', 'natural_movie_two',
+        'natural_movie_three'.
+    num_iter : int
+        Number of iterations to use for noise ceiling estimation using bootstrap.
+    models : dict
+        Dictionary of species and their model checkpoint paths.
+    seq_len : int
+        Sequence length to use for the stimulus.
+
+    Returns
+    -------
+    dict
+        Dictionary of RSA values for each model.
+    dict
+        Dictionary of RDMs for each model.
+    np.ndarray
+        Noise ceiling for the Allen Brain Observatory data.
+    """
     rdms_allen, noise_ceiling = get_rdms_allen(area=area, depth=depth, cre_line=cre_line, stim_type=stim_type,
                                                num_iter=num_iter, seq_len=seq_len)
     all_rsas = {}

@@ -5,7 +5,25 @@ from .activations import get_activations_model, get_activations_allen, get_activ
 from .util import merge_dicts, cat_rdms
 
 
-def get_rdms_model(ckpt_paths, stim_type, seq_len):
+def get_rdms_model(ckpt_paths: list, stim_type: str, seq_len: int):
+    """
+    Calculate RDMs for a list of model checkpoints.
+
+    Parameters
+    ----------
+    ckpt_paths : list
+        List of paths to the model checkpoints
+    stim_type : str
+        Which stimulus type to use, can be one of 'natural_scenes', 'natural_movie_one', 'natural_movie_two',
+        'natural_movie_three'.
+    seq_len : int
+        Sequence length to use for the stimulus and model.
+
+    Returns
+    -------
+    dict
+        Dictionary of list of rdms for each layer in the models.
+    """
     print(f"Calculating RDMs for pixels")
     rdm_pixel = get_rdms_pixel(stim_type=stim_type, seq_len=seq_len)
     rdms = [rdm_pixel] * len(ckpt_paths)
@@ -22,14 +40,56 @@ def get_rdms_model(ckpt_paths, stim_type, seq_len):
     return rdms
 
 
-def get_rdms_pixel(stim_type, seq_len):
+def get_rdms_pixel(stim_type: str, seq_len: int):
+    """
+    Calculate RDMs for the pixel representation of the stimulus.
+
+    Parameters
+    ----------
+    stim_type : str
+        Which stimulus type to use, can be one of 'natural_scenes', 'natural_movie_one', 'natural_movie_two',
+        'natural_movie_three'.
+    seq_len : int
+        Sequence length to use for the stimulus.
+
+    Returns
+    -------
+    dict
+        Dictionary of RDM for the pixel representation of the stimulus.
+    """
     act = get_activations_pixel(stim_type=stim_type, seq_len=seq_len)
     act_dset = rsa.data.Dataset(act.flatten(1).numpy())
     rdm = rsa.rdm.calc_rdm(act_dset, method="correlation")
     return {'pixel': rdm}
 
 
-def get_rdms_allen(area, depth, cre_line, stim_type, num_iter, seq_len):
+def get_rdms_allen(area: str, depth: int, cre_line: str, stim_type: str, num_iter: int, seq_len: int):
+    """
+    Calculate RDMs for the Allen Brain Observatory data.
+
+    Parameters
+    ----------
+    area : str
+        Which brain area to use. Can be one of 'VISp', 'VISl', 'VISal', 'VISpm', 'VISam', 'VISrl'.
+    depth : int
+        Which depth to use.
+    cre_line : str
+        Which cre line to use.
+    stim_type : str
+        Which stimulus type to use, can be one of 'natural_scenes', 'natural_movie_one', 'natural_movie_two',
+        'natural_movie_three'.
+    num_iter : int
+        Number of iterations to estimate the noise ceiling.
+    seq_len : int
+        Sequence length to use for the stimulus.
+
+    Returns
+    -------
+    dict
+        Dictionary of RDMs for the Allen Brain Observatory data.
+    np.ndarray
+        Noise ceiling for the RDMs.
+    """
     print(f"Calculating RDMs for {stim_type} {area} {depth} {cre_line}")
     activations = get_activations_allen(area=area, depth=depth, cre_line=cre_line, stim_type=stim_type,
                                         seq_len=seq_len)
@@ -57,8 +117,18 @@ def get_rdms_allen(area, depth, cre_line, stim_type, num_iter, seq_len):
     return rdms, noise_ceiling
 
 
-def estimate_rdm_noise_ceiling(activations, num_iter):
-    # activations are T (number of trials) x M (number of stimuli) x N (number of neurons)
+def estimate_rdm_noise_ceiling(activations: np.ndarray, num_iter: int):
+    """
+    Estimate the noise ceiling for the RDMs.
+
+    Parameters
+    ----------
+    activations : np.ndarray
+        Activations of shape T x M x N, where T is the number of trials, M is the number of stimuli, and N is the number
+        of neurons.
+    num_iter : int
+        Number of iterations to estimate the noise ceiling.
+    """
     num_trials = activations.shape[0]
     r1 = []
     for i in range(num_iter):

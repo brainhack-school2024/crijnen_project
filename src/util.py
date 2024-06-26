@@ -1,3 +1,4 @@
+from typing import Optional, Dict, Any
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -16,7 +17,11 @@ boc = BrainObservatoryCache(
     manifest_file='../data/brain_observatory_manifest.json')
 
 
-def plot_rsa(rsa, area, stim_type, noise_ceiling=None, noise_corrected=False, save_path=None):
+def plot_rsa(rsa: dict, area: str, stim_type: str, noise_ceiling: Optional[np.ndarray] = None,
+             noise_corrected: Optional[bool] = False, save_path: Optional[str] = None):
+    """
+    Plot RSA results.
+    """
     area, depth, cre_line = area
     data = []
     for species, kt in rsa.items():
@@ -60,6 +65,19 @@ def plot_rsa(rsa, area, stim_type, noise_ceiling=None, noise_corrected=False, sa
 
 
 def merge_dicts(dicts: list):
+    """
+    Merge dictionaries creating a list of values for each key.
+
+    Parameters
+    ----------
+    dicts : list
+        List of dictionaries to merge.
+
+    Returns
+    -------
+    dict
+        Merged dictionary.
+    """
     super_dict = {}
     for d in dicts:
         for k, v in d.items():
@@ -68,11 +86,41 @@ def merge_dicts(dicts: list):
 
 
 def cat_rdms(rdms: list):
+    """
+    Concatenate list of RDMs.
+
+    Parameters
+    ----------
+    rdms : list
+        List of RDMs.
+
+    Returns
+    -------
+    rsa.rdm.RDMs
+        All RDMs in a single RDMs object.
+    """
     rdm_matrices = np.concatenate([rdm.get_matrices() for rdm in rdms], axis=0)
     return rsa.rdm.RDMs(rdm_matrices, "correlation")
 
 
-def load_model(ckpt_path):
+def load_model(ckpt_path: str):
+    """
+    Load model from checkpoint.
+
+    Parameters
+    ----------
+    ckpt_path : str
+        Path to the model checkpoint.
+
+    Returns
+    -------
+    nn.Module
+        Loaded model.
+    dict
+        Normalization values (mean and std).
+    int
+        Sequence length of the model.
+    """
     model = DPCPlusLit.load_from_checkpoint(ckpt_path, map_location="cpu")
     model.eval()
     model.freeze()
@@ -82,7 +130,22 @@ def load_model(ckpt_path):
     return model, norm_kwargs, seq_len
 
 
-def extract_one_path(model, path):
+def extract_one_path(model: nn.Module, path: int):
+    """
+    Extract one path from the model using IntermediateLayerGetter which returns the intermediate activations.
+
+    Parameters
+    ----------
+    model : nn.Module
+        Model to extract path from.
+    path : int
+        Path to extract.
+
+    Returns
+    -------
+    IntermediateLayerGetter
+        Extracted path
+    """
     m = nn.Sequential()
     for i, block in enumerate(model.network.backbone.get_submodule(f"path{path}").res_blocks.children()):
         m.add_module(f"p{path + 1}_res_block{i + 1}", block)
@@ -93,7 +156,25 @@ def extract_one_path(model, path):
     return m
 
 
-def get_stimulus(stim_type, seq_len, norm_kwargs=None):
+def get_stimulus(stim_type: str, seq_len: int, norm_kwargs: Optional[Dict[str, Any]] = None):
+    """
+    Get stimulus dataset.
+
+    Parameters
+    ----------
+    stim_type : str
+        Which stimulus type to use, can be one of 'natural_scenes', 'natural_movie_one', 'natural_movie_two',
+        'natural_movie_three'.
+    seq_len : int
+        Sequence length to use for the stimulus.
+    norm_kwargs : dict
+        Normalization values (mean and std).
+
+    Returns
+    -------
+    DataLoader
+        Stimulus DataLoader.
+    """
     transforms = T.Compose([
         T.ToTensor(),
         T.Resize((64, 64), antialias=True),
