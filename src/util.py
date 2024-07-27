@@ -1,12 +1,14 @@
+import os
 from typing import Optional, Dict, Any
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytorchvideo.transforms as TV
-import rsatoolbox as rsa
 import seaborn as sns
 import torch
 import torchvision.transforms as T
+from PIL import Image
 from allensdk.core.brain_observatory_cache import BrainObservatoryCache
 from dpc.models.dpc_plus_lit import DPCPlusLit
 from torch import nn
@@ -17,13 +19,58 @@ boc = BrainObservatoryCache(
     manifest_file='../data/brain_observatory_manifest.json')
 
 
-def plot_rsa(rsa: dict, area: str, stim_type: str, noise_ceiling: Optional[np.ndarray] = None,
+def get_save_path(dest_folder, *path, ext='pt'):
+    if dest_folder is not None:
+        path = os.path.join(dest_folder, *path)
+        return path if ext is None else f'{path}.{ext}'
+    return None
+
+
+def load_object(path: str):
+    """
+    Load RDMs from a file.
+
+    Parameters
+    ----------
+    path : str
+        Path to the file.
+
+    Returns
+    -------
+    dict
+        Loaded RDMs.
+    """
+    if os.path.exists(path):
+        return torch.load(path)
+    else:
+        return None
+
+
+def save_object(data: object, path: str):
+    """
+    Save RDMs to a file.
+
+    Parameters
+    ----------
+    data : dict
+        RDMs to save.
+    path : str
+        Path to save the RDMs.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if path is not None and not os.path.exists(path):
+        torch.save(data, path)
+
+
+def plot_rsa(rsa: dict, config: dict, noise_ceiling: Optional[np.ndarray] = None,
              noise_corrected: Optional[bool] = False, save_path: Optional[str] = None):
     """
     Plot RSA results.
     """
-    area, depth, cre_line = area
+    mode = config.pop('mode')
+    area = config.pop('area')
     data = []
+    # max_layers = max([int(k.split('_')[-1]) for k in rsa.keys()])
     for species, kt in rsa.items():
         df_model = pd.DataFrame(kt).melt(var_name='Layer', value_name='RSA')
         df_model['Model'] = species
@@ -36,10 +83,10 @@ def plot_rsa(rsa: dict, area: str, stim_type: str, noise_ceiling: Optional[np.nd
     if noise_ceiling is not None and noise_corrected:
         df['RSA'] /= np.median(noise_ceiling)
 
-    plt.figure(figsize=(10, 6))
-    colors = ['darkblue', 'blue', 'deepskyblue', 'darkred', 'red', 'orange']
-    sns.pointplot(data=df, x='Layer', y='RSA', hue='Model_Path', palette=colors, dodge=0.4, estimator='median',
-                  errwidth=2, markersize=3, markers='o', join=False)
+    plt.figure(figsize=(18, 6))
+    colors = ['darkblue'] * 3 + ['darkred'] * 3 + ['blue'] * 3 + ['red'] * 3 + ['deepskyblue'] * 3 + ['orange'] * 3
+    pointplot = sns.pointplot(data=df, x='Layer', y='RSA', hue='Model_Path', palette=colors, dodge=0.7,
+                              estimator='median', errwidth=1, markersize=2, markers=['o', '<', '>'] * 6, join=False)
     x_limits = plt.xlim()
     if noise_ceiling is not None and not noise_corrected:
         med = np.median(noise_ceiling)
@@ -57,11 +104,15 @@ def plot_rsa(rsa: dict, area: str, stim_type: str, noise_ceiling: Optional[np.nd
     plt.xlim(x_limits)
 
     if save_path is not None:
-        plt.savefig(save_path + ('_nc' if noise_ceiling is not None and noise_corrected else '') + '.svg')
+        save_path = save_path + ('_nc' if noise_ceiling is not None and noise_corrected else '') + '.svg'
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path)
 
-    plt.title(f'Representational Similarity Analysis between {area} and ANNs trained with SSL\n'
-              f'stimulus: {stim_type}, depth: {depth}, cre_line: {cre_line}')
+    plt.title(f'Representational Similarity Analysis between {mode} {area} and ANNs trained with SSL'
+              '\n' if len(config) > 0 else ''
+              f', '.join([f'{k}: {v}' for k, v in config.items()]) if len(config) > 0 else '')
     plt.show()
+    return df
 
 
 def merge_dicts(dicts: list):
@@ -83,24 +134,6 @@ def merge_dicts(dicts: list):
         for k, v in d.items():
             super_dict.setdefault(k, []).append(v)
     return super_dict
-
-
-def cat_rdms(rdms: list):
-    """
-    Concatenate list of RDMs.
-
-    Parameters
-    ----------
-    rdms : list
-        List of RDMs.
-
-    Returns
-    -------
-    rsa.rdm.RDMs
-        All RDMs in a single RDMs object.
-    """
-    rdm_matrices = np.concatenate([rdm.get_matrices() for rdm in rdms], axis=0)
-    return rsa.rdm.RDMs(rdm_matrices, "correlation")
 
 
 def load_model(ckpt_path: str):
@@ -156,9 +189,47 @@ def extract_one_path(model: nn.Module, path: int):
     return m
 
 
-def get_stimulus(stim_type: str, seq_len: int, norm_kwargs: Optional[Dict[str, Any]] = None):
+def get_stimulus(mode: str, seq_len: int, norm_kwargs: Optional[Dict[str, Any]] = None, **kwargs):
     """
     Get stimulus dataset.
+
+    Parameters
+    ----------
+    mode : str
+        Which stimulus dataset to use, can be one of 'allen', 'monkey'.
+    seq_len : int
+        Sequence length to use for the stimulus.
+    norm_kwargs : dict
+        Normalization values (mean and std).
+    **kwargs
+        Additional arguments for the stimulus dataset.
+
+    Returns
+    -------
+    DataLoader
+        Stimulus DataLoader.
+    """
+    if mode == "allen":
+        data = get_stimulus_allen(seq_len=seq_len, **kwargs)
+    elif mode == "monkey":
+        data = get_stimulus_monkey(**kwargs)
+    else:
+        raise ValueError(f'Invalid mode {mode}')
+
+    transforms = T.Compose([
+        T.ToTensor(),
+        T.Resize((64, 64), antialias=True),
+        T.Lambda(lambda x: x.expand(3, seq_len, -1, -1)),
+        TV.Normalize(**norm_kwargs) if norm_kwargs is not None else T.Lambda(lambda x: x),
+    ])
+
+    ds = StimuliDataset(data, transform=transforms)
+    return DataLoader(ds, batch_size=32, num_workers=8, shuffle=False)
+
+
+def get_stimulus_allen(stim_type: str, seq_len: int):
+    """
+    Get stimulus data.
 
     Parameters
     ----------
@@ -167,33 +238,36 @@ def get_stimulus(stim_type: str, seq_len: int, norm_kwargs: Optional[Dict[str, A
         'natural_movie_three'.
     seq_len : int
         Sequence length to use for the stimulus.
-    norm_kwargs : dict
-        Normalization values (mean and std).
 
     Returns
     -------
     DataLoader
         Stimulus DataLoader.
     """
-    transforms = T.Compose([
-        T.ToTensor(),
-        T.Resize((64, 64), antialias=True),
-        T.Lambda(lambda x: x.expand(3, seq_len, -1, -1)),
-        TV.Normalize(**norm_kwargs) if norm_kwargs is not None else T.Lambda(lambda x: x),
-    ])
     data_set = boc.get_ophys_experiment_data(501498760)
     data = data_set.get_stimulus_template(stim_type)
 
-    n, h, w = data.shape
+    _, h, w = data.shape
     if stim_type == "natural_scenes":
-        data = data[:, :, :, None]
+        return data[:, :, :, None]
     elif stim_type in ['natural_movie_one', 'natural_movie_two', 'natural_movie_three']:
-        data = data.reshape(-1, seq_len, h, w).transpose(0, 2, 3, 1)
+        return data.reshape(-1, seq_len, h, w).transpose(0, 2, 3, 1)
     else:
         raise ValueError(f'Invalid stimulus type {stim_type}')
 
-    ds = StimuliDataset(data, transform=transforms)
-    return DataLoader(ds, batch_size=32, num_workers=8, shuffle=False)
+
+def get_stimulus_monkey(json_path_images: str, root: str):
+    images = pd.read_json(json_path_images)
+    images = images.drop_duplicates(subset='Image_file', keep='first')
+
+    data = []
+    for img_path in images.Image_file:
+        img_path = os.path.join(root, img_path)
+        with open(img_path, "rb") as f:
+            img = Image.open(f)
+            data.append(np.array(img, np.uint8, copy=True))
+
+    return np.array(data)[:, :, :, None]
 
 
 class StimuliDataset(Dataset):
