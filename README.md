@@ -56,7 +56,7 @@ How similar are the representations of ANNs (treeshrew and rat) to those in the 
 ### Deliverables
 * This GitHub repository containing the code and model checkpoints to reproduce my results.
 * A jupyter notebook of the RSA: [rsa notebook](notebooks/analysis.ipynb)
-* A jupyter notebook containing the visualisations of my analysis: [rsa notebook](notebooks/results.ipynb)
+* A jupyter notebook containing the visualisations of my analysis: [rsa notebook](notebooks/analysis.ipynb)
 
 ## Results
 
