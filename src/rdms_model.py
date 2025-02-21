@@ -87,7 +87,8 @@ class ModelRDMs(BaseRDMs):
                 self.save(dest_folder, fname, rdms=self.rdms[stim_type])
         print()
 
-    def get_activations(self, dl, models):
+    @staticmethod
+    def get_activations(dl, models):
         activations = []
 
         for model in models:
