@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Any, List, Dict
+from typing import Optional, Any, List, Dict, Callable, Union
 
 import numpy as np
 import pandas as pd
@@ -13,6 +13,7 @@ from dpc.models.dpc_plus_lit import DPCPlusLit
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torchvision.models._utils import IntermediateLayerGetter
+from torchvision.models import get_model_weights, get_model
 
 from .rdms import BaseRDMs
 from .rdms_monkey import image_order_majaj
@@ -23,7 +24,7 @@ class ModelRDMs(BaseRDMs):
     def __init__(
             self,
             stimuli: Dict[str, dict],
-            ckpt_paths: List[str],
+            ckpt_paths: Union[List[str], str],
             name: str,
             dest_folder: Optional[str] = None,
             force_activations: Optional[bool] = False,
@@ -33,7 +34,16 @@ class ModelRDMs(BaseRDMs):
         super().__init__(dest_folder=dest_folder, seed=seed)
         print(f'Processing model {name}')
 
-        models, norm_kwargs, seq_len = load_models(ckpt_paths)
+        pretrained = isinstance(ckpt_paths, str)
+        transforms = None
+        norm_kwargs = None
+        seq_len = 15
+
+        if pretrained:
+            model, transforms = load_pretrained_model(ckpt_paths)
+            models = [model]
+        else:
+            models, norm_kwargs, seq_len = load_models(ckpt_paths)
 
         for dset, config in stimuli.items():
             dest_folder = get_save_path(self.dest_folder, dset, ext=None)
@@ -61,7 +71,9 @@ class ModelRDMs(BaseRDMs):
                 if not force_activations and self.rdms[stim_type] is not None:
                     continue
 
-                dl = get_stimulus_dl(data=stimulus, dset=dset, seq_len=seq_len, norm_kwargs=norm_kwargs)
+                if not pretrained:
+                    transforms = get_dpc_transforms(dset, seq_len, norm_kwargs)
+                dl = get_stimulus_dl(data=stimulus, transforms=transforms)
                 activations_pixel = self.get_activations_pixel(dl)
                 activations_models = self.get_activations(dl, models)
                 activations = [activations_pixel] + activations_models
@@ -82,6 +94,7 @@ class ModelRDMs(BaseRDMs):
             layers = model.layers
             acts = {n: [] for n in layers}
             model.cuda()
+            model.eval()
 
             for batch in dl:
                 x = batch.cuda()
@@ -90,7 +103,8 @@ class ModelRDMs(BaseRDMs):
                 for n in layers:
                     acts[n].append(out[n].detach().cpu())
 
-            acts = {n: torch.cat(v, 0).mean(2) for n, v in acts.items()}
+            acts = {n: torch.cat(v, 0).mean(2) if torch.cat(v, 0).ndim > 4
+                    else torch.cat(v, 0) for n, v in acts.items()}
             activations.append(acts)
         return activations
 
@@ -132,6 +146,45 @@ class ModelRDMs(BaseRDMs):
         return rdms
 
 
+def load_pretrained_model(model_name: str):
+    weights = get_model_weights(model_name).DEFAULT
+    model = get_model(model_name, weights=weights)
+
+    m = nn.Sequential()
+    m.add_module('layer0', nn.Sequential(*list(model.children())[:4]))
+
+    for block_name, block in model.named_children():
+        if "layer" in block_name:
+            for i, sub_block in enumerate(block):
+                m.add_module(f"{block_name}_block{i + 1}", sub_block)
+
+    layers = [n for n, _ in m.named_children()]
+    feature_extractor = IntermediateLayerGetter(m, dict(zip(layers, layers)))
+
+    class PretrainedModel(nn.Module):
+        def __init__(self, model):
+            super().__init__()
+            self.model = model
+            self.layers = layers
+
+        def forward(self, x):
+            n = None
+            t = None
+            if x.ndim == 5:
+                n, t, _, _, _ = x.shape
+                x = x.flatten(0, 1)
+            out = self.model(x)
+            if n is not None:
+                for k, v in out.items():
+                    out[k] = v.unflatten(0, (n, t)).permute(0, 2, 1, 3, 4)
+            return out
+
+    model = PretrainedModel(feature_extractor)
+    transforms = weights.transforms()
+
+    return model, transforms
+
+
 def load_models(ckpt_paths: List[str]):
     models = []
     norm_kwargs = None
@@ -171,11 +224,9 @@ def load_model(ckpt_path: str):
         Sequence length of the model.
     """
     model = DPCPlusLit.load_from_checkpoint(ckpt_path, map_location="cpu")
-    model.eval()
-    model.freeze()
     norm_kwargs = {"mean": model.hparams.mean, "std": model.hparams.std}
     seq_len = model.network.last_duration
-    model = Model(model)
+    model = VisualNet(model)
     return model, norm_kwargs, seq_len
 
 
@@ -205,7 +256,7 @@ def extract_one_path(model: nn.Module, path: int):
     return m
 
 
-class Model(nn.Module):
+class VisualNet(nn.Module):
     def __init__(self, model):
         super().__init__()
         self.model = model
@@ -296,18 +347,28 @@ class StimuliDataset(Dataset):
     def __getitem__(self, idx):
         img = self.images[idx]
         if self.transform:
-            img = self.transform(img)
+            try:
+                img = self.transform(img)
+            except TypeError:
+                img = torch.tensor(img).permute(2, 0, 1)
+                if img.size(0) == 1:
+                    img = img.expand(3, -1, -1)
+                    img = self.transform(img)
+                else:
+                    imgs = []
+                    for i, image in enumerate(img):
+                        image = image.unsqueeze(0).expand(3, -1, -1)
+                        imgs.append(self.transform(image))
+                    img = torch.stack(imgs, 0)
         return img
 
 
-def get_stimulus_dl(data: np.ndarray, dset: str, seq_len: int, norm_kwargs: Optional[Dict[str, Any]] = None):
+def get_dpc_transforms(dset: str, seq_len: int, norm_kwargs: Optional[Dict[str, Any]] = None):
     """
-    Get stimulus dataset.
+    Get transformations to apply to the stimulus data.
 
     Parameters
     ----------
-    data : str
-        The stimulus data.
     dset : str
         The dataset name.
     seq_len : int
@@ -317,17 +378,36 @@ def get_stimulus_dl(data: np.ndarray, dset: str, seq_len: int, norm_kwargs: Opti
 
     Returns
     -------
-    DataLoader
-        Stimulus DataLoader.
+    Callable
+        Transformations to apply to the stimulus data.
     """
     transforms = T.Compose([
         T.ToTensor(),
         T.Resize((64, 64), antialias=True),
-        T.Lambda(lambda x: x.unsqueeze(1) if len(x.shape) == 3 else x) if dset == 'majaj'
+        T.Lambda(lambda x: x.unsqueeze(1)) if dset == 'majaj'
         else T.Lambda(lambda x: x.unsqueeze(0) if len(x.shape) == 3 else x),
         T.Lambda(lambda x: x.expand(3, seq_len, -1, -1)),
         TV.Normalize(**norm_kwargs) if norm_kwargs is not None else T.Lambda(lambda x: x),
     ])
 
+    return transforms
+
+
+def get_stimulus_dl(data: np.ndarray, transforms: Callable):
+    """
+    Get stimulus dataset.
+
+    Parameters
+    ----------
+    data : str
+        The stimulus data.
+    transforms : Callable
+        Transformations to apply to the stimulus data.
+
+    Returns
+    -------
+    DataLoader
+        Stimulus DataLoader.
+    """
     ds = StimuliDataset(data, transform=transforms)
     return DataLoader(ds, batch_size=256, num_workers=4, shuffle=False)

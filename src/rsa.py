@@ -32,7 +32,7 @@ def calculate_rsa(model_config, dset_config, dest_folder: Optional[str] = None, 
             model_rdms = model.rdms[dset_and_stim]
             for area, rdms in brain_area.rdms.items():
                 if 'allen' in dset_and_stim:
-                    name = '_'.join([dset_and_stim[1], *[str(v) for v in area]])
+                    name = '_'.join([str(v) for v in area])
                     dset = 'allen'
                 else:
                     name = area
